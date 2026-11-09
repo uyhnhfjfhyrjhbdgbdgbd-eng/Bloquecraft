@@ -20,6 +20,48 @@ jobs:
         with:
           gradle-version: '8.7'
 
+      - name: Prepare Android project
+        run: |
+          mkdir -p app/src/main/java/com/bloquecraft/game
+          mkdir -p app/src/main/assets
+          mv MainActivity.kt app/src/main/java/com/bloquecraft/game/
+          mv index.html app/src/main/assets/
+
+          cat > app/build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+          android {
+              namespace = "com.bloquecraft.game"
+              compileSdk = 35
+              defaultConfig {
+                  applicationId = "com.bloquecraft.game"
+                  minSdk = 23
+                  targetSdk = 28
+                  versionCode = 1
+                  versionName = "0.1"
+              }
+          }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <application android:theme="@android:style/Theme.Material.Light.NoActionBar"
+                  android:label="BloqueCraft 3D">
+                  <activity android:name=".MainActivity"
+                      android:screenOrientation="landscape"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
       - name: Build APK
         run: gradle assembleDebug
 
