@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Bloquecraft 3D</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#87ceeb;font-family:system-ui,Arial;touch-action:none}
+canvas{display:block}
+#hud{position:fixed;inset:0;pointer-events:none;color:#fff;text-shadow:2px 2px 3px #222;font-weight:800}
+#brand{position:absolute;top:8px;left:10px;font-size:18px}
+#help{position:absolute;top:10px;right:10px;font-size:11px;text-align:right;max-width:55%}
+#cross{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:24px;font-weight:400}
+#bar{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:4px;padding:5px;background:#222b;border:2px solid #aaa;border-radius:7px;pointer-events:auto}
+.slot{width:42px;height:42px;background:#555b;border:2px solid #888;display:grid;place-items:center;font-size:20px;position:relative}
+.slot.sel{border:3px solid white;background:#888d}.count{position:absolute;right:2px;bottom:-1px;font-size:10px}
+#mobile{position:fixed;inset:0;pointer-events:none}
+#stick{position:absolute;left:18px;bottom:78px;width:112px;height:112px;border-radius:50%;background:#2225;border:2px solid #fff8;pointer-events:auto}
+#nub{position:absolute;left:33px;top:33px;width:42px;height:42px;border-radius:50%;background:#ffffff99;border:2px solid white}
+#buttons{position:absolute;right:13px;bottom:75px;display:grid;grid-template-columns:62px 62px;gap:8px;pointer-events:auto}
+button{height:58px;border:2px solid #fff9;border-radius:12px;background:#2229;color:white;font-weight:900;font-size:12px;touch-action:none}
+#jump{grid-column:2}#mine{grid-column:1}#place{grid-column:2}
+#notice{position:absolute;left:50%;top:55px;transform:translateX(-50%);font-size:11px;background:#1118;padding:5px 8px;border-radius:6px;white-space:nowrap}
+#start{position:fixed;inset:0;background:#0009;display:flex;align-items:center;justify-content:center;color:white;text-align:center;padding:24px}
+#panel{max-width:340px;background:#263b2b;border:3px solid #b5a16a;border-radius:12px;padding:20px;box-shadow:0 8px 30px #0008}
+#panel h1{margin:0 0 8px;font-size:28px}#panel p{font-size:14px;line-height:1.4}
+#go{background:#579b43;border:2px solid #d9e8b8;padding:12px 28px;height:auto;font-size:17px}
+@media(min-width:800px){#stick,#buttons{opacity:.75}}
+</style>
+</head>
+<body>
+<div id="hud">
+ <div id="brand">🟩 BLOQUECRAFT 3D</div>
+ <div id="help">Mueve el joystick y desliza la pantalla para mirar<br>Rompe bloques y construye tu mundo</div>
+ <div id="cross">＋</div><div id="notice">Selecciona un bloque y apunta para minar o construir</div>
+ <div id="bar"></div>
+</div>
+<div id="mobile">
+ <div id="stick"><div id="nub"></div></div>
+ <div id="buttons"><button id="jump">SALTAR</button><button id="mine">⛏ MINAR</button><button id="place">🧱 PONER</button></div>
+</div>
+<div id="start"><div id="panel"><h1>🟩 BLOQUECRAFT 3D</h1><p>Un mundo de bloques en 3D para explorar, minar y construir.</p><p>En móvil: joystick para caminar, desliza el lado derecho para mirar y usa los botones.</p><button id="go">ENTRAR AL MUNDO</button></div></div>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x87ceeb);scene.fog=new THREE.Fog(0x87ceeb,18,55);
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.1,100);camera.rotation.order='YXZ';
+const renderer=new THREE.WebGLRenderer({antialias:false});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;document.body.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xd9f2ff,0x6d5737,2));
+const sun=new THREE.DirectionalLight(0xffffff,2.2);sun.position.set(-12,24,10);sun.castShadow=true;scene.add(sun);
+const mats={
+ grass:new THREE.MeshLambertMaterial({color:0x58a83d}),dirt:new THREE.MeshLambertMaterial({color:0x80502c}),
+ stone:new THREE.MeshLambertMaterial({color:0x858585}),wood:new THREE.MeshLambertMaterial({color:0x95602f}),
+ leaves:new THREE.MeshLambertMaterial({color:0x277b38}),sand:new THREE.MeshLambertMaterial({color:0xd9c47a}),
+};
+const labels={grass:'🟩',dirt:'🟫',stone:'⬜',wood:'🪵',leaves:'🌿',sand:'🟨'};
+const types=Object.keys(mats),geo=new THREE.BoxGeometry(1,1,1),blocks=new Map(),meshes=[];
+const key=(x,y,z)=>`${x},${y},${z}`;
+function addBlock(x,y,z,type){let k=key(x,y,z);if(blocks.has(k))return;let m=new THREE.Mesh(geo,mats[type]);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;m.userData={x,y,z,type};scene.add(m);blocks.set(k,m);meshes.push(m)}
+function removeBlock(m){scene.remove(m);blocks.delete(key(m.userData.x,m.userData.y,m.userData.z));let i=meshes.indexOf(m);if(i>=0)meshes.splice(i,1)}
+// Terrain with gently rolling hills
+for(let x=-16;x<=16;x++)for(let z=-16;z<=16;z++){
+ let h= Math.floor(2+Math.sin(x*.35)*1.1+Math.cos(z*.28)*.9);
+ for(let y=-2;y<=h;y++)addBlock(x,y,z,y===h?'grass':y>h-3?'dirt':'stone');
+}
+// Trees
+for(let x=-13;x<=13;x+=6)for(let z=-12;z<=12;z+=7){
+ let h= Math.floor(2+Math.sin(x*.35)*1.1+Math.cos(z*.28)*.9);
+ if(Math.abs(x)<4&&Math.abs(z)<4)continue;
+ for(let y=1;y<=3;y++)addBlock(x,h+y,z,'wood');
+ for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)for(let dy=2;dy<=4;dy++){
+  if(Math.abs(dx)+Math.abs(dz)+(dy===4?1:0)<5)addBlock(x+dx,h+dy,z+dz,'leaves');
+ }
+}
+// Sand patch / water-like pond
+for(let x=7;x<=10;x++)for(let z=-3;z<=1;z++){let h=Math.floor(2+Math.sin(x*.35)*1.1+Math.cos(z*.28)*.9);let old=blocks.get(key(x,h,z));if(old){removeBlock(old);addBlock(x,h,z,'sand')}}
+const water=new THREE.Mesh(new THREE.BoxGeometry(4,.08,4),new THREE.MeshLambertMaterial({color:0x329fd1,transparent:true,opacity:.72}));water.position.set(8,1.95,-1);scene.add(water);
+camera.position.set(0,5,7);let yaw=0,pitch=-.18,velY=0,onGround=false;
+const inventory={grass:24,dirt:32,stone:18,wood:12,leaves:0,sand:0};let selected='grass';
+const bar=document.getElementById('bar');
+function drawBar(){bar.innerHTML='';types.forEach(t=>{let d=document.createElement('div');d.className='slot'+(t===selected?' sel':'');d.innerHTML=labels[t]+'<span class="count">'+inventory[t]+'</span>';d.onclick=()=>{selected=t;drawBar()};bar.appendChild(d)})}drawBar();
+const ray=new THREE.Raycaster();ray.far=6;
+function target(){ray.setFromCamera(new THREE.Vector2(0,0),camera);return ray.intersectObjects(meshes,false)[0]}
+function mine(){let hit=target();if(!hit)return;let m=hit.object,t=m.userData.type;if(camera.position.distanceTo(m.position)>6)return;inventory[t]=(inventory[t]||0)+1;removeBlock(m);drawBar()}
+function place(){let hit=target();if(!hit||inventory[selected]<=0)return;let n=hit.face.normal.clone();let p=hit.object.position.clone().add(n);if(Math.abs(p.x-camera.position.x)<.8&&Math.abs(p.z-camera.position.z)<.8&&Math.abs(p.y-(camera.position.y-1))<1.8)return;addBlock(Math.round(p.x),Math.round(p.y),Math.round(p.z),selected);inventory[selected]--;drawBar()}
+document.getElementById('mine').addEventListener('pointerdown',e=>{e.preventDefault();mine()});
+document.getElementById('place').addEventListener('pointerdown',e=>{e.preventDefault();place()});
+document.getElementById('jump').addEventListener('pointerdown',e=>{e.preventDefault();if(onGround){velY=7;onGround=false}});
+let joy={x:0,y:0},stick=document.getElementById('stick'),nub=document.getElementById('nub'),joyId=null;
+function setJoy(e){let r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,dx=e.clientX-cx,dy=e.clientY-cy,l=Math.hypot(dx,dy),max=37;if(l>max){dx=dx/l*max;dy=dy/l*max}joy.x=dx/max;joy.y=dy/max;nub.style.transform=`translate(${dx}px,${dy}px)`}
+stick.addEventListener('pointerdown',e=>{joyId=e.pointerId;stick.setPointerCapture(joyId);setJoy(e)});
+stick.addEventListener('pointermove',e=>{if(e.pointerId===joyId)setJoy(e)});
+function releaseJoy(){joyId=null;joy.x=joy.y=0;nub.style.transform='translate(0,0)'}
+stick.addEventListener('pointerup',releaseJoy);stick.addEventListener('pointercancel',releaseJoy);
+let lookId=null,lastX=0,lastY=0;
+renderer.domElement.addEventListener('pointerdown',e=>{if(e.clientX<innerWidth*.36||e.clientY>innerHeight-165)return;lookId=e.pointerId;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(lookId)});
+renderer.domElement.addEventListener('pointermove',e=>{if(e.pointerId!==lookId)return;let dx=e.clientX-lastX,dy=e.clientY-lastY;lastX=e.clientX;lastY=e.clientY;yaw-=dx*.004;pitch-=dy*.004;pitch=Math.max(-1.45,Math.min(1.45,pitch))});
+renderer.domElement.addEventListener('pointerup',()=>lookId=null);renderer.domElement.addEventListener('pointercancel',()=>lookId=null);
+let keys={};addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if('123456'.includes(e.key)){selected=types[Number(e.key)-1];drawBar()}if(e.code==='Space'&&onGround){velY=7;onGround=false}if(e.key.toLowerCase()==='f')mine();if(e.key.toLowerCase()==='g')place()});
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+function blocked(pos){let x=Math.round(pos.x),z=Math.round(pos.z),feet=pos.y-1.55;for(let dx=-1;dx<=1;dx+=2)for(let dz=-1;dz<=1;dz+=2){for(let yy=Math.floor(feet);yy<=Math.floor(pos.y-.15);yy++)if(blocks.has(key(Math.round(pos.x+dx*.25),yy,Math.round(pos.z+dz*.25))))return true}return false}
+const clock=new THREE.Clock();
+function animate(){requestAnimationFrame(animate);let dt=Math.min(clock.getDelta(),.04);
+ let forward=-(joy.y||((keys.w||keys.arrowup)?1:0)-((keys.s||keys.arrowdown)?1:0));
+ let side=joy.x||((keys.d||keys.arrowright)?1:0)-((keys.a||keys.arrowleft)?1:0);
+ let speed=4.5,dx=(Math.sin(yaw)*forward+Math.cos(yaw)*side)*speed*dt,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*side)*speed*dt;
+ let old=camera.position.clone();camera.position.x+=dx;camera.position.z+=dz;if(blocked(camera.position)){camera.position.x=old.x;camera.position.z=old.z}
+ velY-=18*dt;camera.position.y+=velY*dt;
+ // Ground collision using block directly under player
+ let gx=Math.round(camera.position.x),gz=Math.round(camera.position.z),groundY=-20;
+ for(let y=8;y>=-3;y--)if(blocks.has(key(gx,y,gz))){groundY=y+1.52;break}
+ if(camera.position.y<=groundY){camera.position.y=groundY;velY=0;onGround=true}else onGround=false;
+ camera.rotation.set(pitch,yaw,0);renderer.render(scene,camera)
+}
+animate();
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+document.getElementById('go').onclick=()=>document.getElementById('start').style.display='none';
+</script>
+</body></html>
